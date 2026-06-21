@@ -19,11 +19,12 @@ export async function proxy(request: NextRequest) {
   }
 
   const cookieStore = await cookies();
-  let accessToken = cookieStore.get("accessToken")?.value;
+  const accessToken = cookieStore.get("accessToken")?.value;
   const refreshToken = cookieStore.get("refreshToken")?.value;
 
   let isAuthenticated = !!accessToken;
-  let responseWithNewCookies: NextResponse | null = null;
+  let newAccessToken: string | null = null;
+  let newRefreshToken: string | null = null;
 
   if (!accessToken && refreshToken) {
     try {
@@ -31,41 +32,22 @@ export async function proxy(request: NextRequest) {
       const setCookieHeader = refreshResponse.headers["set-cookie"];
 
       if (setCookieHeader) {
-  responseWithNewCookies = NextResponse.next();
-
-  const responseHeaders = new Headers();
-  const cookieArray = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
-  cookieArray.forEach((cookieStr) => {
-    responseHeaders.append("set-cookie", cookieStr);
-  });
-
-  const tempResponse = new Response(null, {
-    headers: responseHeaders,
-  });
-
-  const parsedCookies = tempResponse.headers.getSetCookie();
-
-        const headersObject = new Headers();
-        parsedCookies.forEach((c) => headersObject.append("set-cookie", c));
-        const edgeResponse = NextResponse.next({ headers: headersObject });
-
-        edgeResponse.cookies.getAll().forEach((c) => {
-          responseWithNewCookies?.cookies.set(c.name, c.value, {
-            path: c.path,
-            expires: c.expires,
-            maxAge: c.maxAge,
-            domain: c.domain,
-            sameSite: c.sameSite,
-            httpOnly: c.httpOnly,
-            secure: c.secure,
-          });
-
-          if (c.name === "accessToken") {
-            accessToken = c.value;
+        const cookieArray = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+        
+        for (const cookieStr of cookieArray) {
+          if (cookieStr.includes("accessToken=")) {
+            const match = cookieStr.match(/accessToken=([^;]+)/);
+            if (match) newAccessToken = match[1];
           }
-        });
+          if (cookieStr.includes("refreshToken=")) {
+            const match = cookieStr.match(/refreshToken=([^;]+)/);
+            if (match) newRefreshToken = match[1];
+          }
+        }
 
-        isAuthenticated = true;
+        if (newAccessToken) {
+          isAuthenticated = true;
+        }
       }
     } catch (error) {
       console.error("Middleware session refresh failed:", error);
@@ -73,34 +55,37 @@ export async function proxy(request: NextRequest) {
     }
   }
 
+  
   if (isPrivate && !isAuthenticated) {
     return NextResponse.redirect(new URL("/sign-in", request.url));
   }
 
+  
   if (isPublic && isAuthenticated) {
     const redirectResponse = NextResponse.redirect(new URL("/", request.url));
     
-    if (responseWithNewCookies) {
-      responseWithNewCookies.cookies.getAll().forEach((c) => {
-        redirectResponse.cookies.set(c.name, c.value, {
-          path: c.path,
-          expires: c.expires,
-          maxAge: c.maxAge,
-          domain: c.domain,
-          sameSite: c.sameSite,
-          httpOnly: c.httpOnly,
-          secure: c.secure,
-        });
-      });
+    
+    if (newAccessToken) {
+      redirectResponse.cookies.set("accessToken", newAccessToken, { path: "/" });
+    }
+    if (newRefreshToken) {
+      redirectResponse.cookies.set("refreshToken", newRefreshToken, { path: "/" });
     }
     return redirectResponse;
   }
 
-  if (responseWithNewCookies) {
-    return responseWithNewCookies;
+ 
+  const response = NextResponse.next();
+
+  
+  if (newAccessToken) {
+    response.cookies.set("accessToken", newAccessToken, { path: "/" });
+  }
+  if (newRefreshToken) {
+    response.cookies.set("refreshToken", newRefreshToken, { path: "/" });
   }
 
-  return NextResponse.next();
+  return response;
 }
 
 export const config = {
