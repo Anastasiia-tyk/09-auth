@@ -1,5 +1,7 @@
 // lib/api/serverApi.ts
 
+import "server-only";
+
 import { cookies } from "next/headers";
 import { api } from "@/lib/api/api";
 import { User } from "@/types/user";
