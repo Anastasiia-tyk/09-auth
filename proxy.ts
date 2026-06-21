@@ -69,7 +69,15 @@ export async function proxy(request: NextRequest) {
     
     if (responseWithNewCookies) {
       responseWithNewCookies.cookies.getAll().forEach((c) => {
-        redirectResponse.cookies.set(c.name, c.value);
+        redirectResponse.cookies.set(c.name, c.value, {
+          path: c.path,
+          expires: c.expires,
+          maxAge: c.maxAge,
+          domain: c.domain,
+          sameSite: c.sameSite,
+          httpOnly: c.httpOnly,
+          secure: c.secure,
+        });
       });
     }
     return redirectResponse;
