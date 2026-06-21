@@ -1,7 +1,7 @@
 // lib/api/serverApi.ts
 
 import { cookies } from "next/headers";
-import { api } from "@/app/api/api";
+import { api } from "@/lib/api/api";
 import { User } from "@/types/user";
 
 async function getCookieHeader() {

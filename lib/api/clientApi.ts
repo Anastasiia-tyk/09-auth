@@ -1,6 +1,6 @@
 // lib/api/clientApi.ts
 
-import { api } from "@/app/api/api";
+import { api } from "@/lib/api/api";
 import { User } from "@/types/user";
 import { NoteTag } from "@/types/note";
 
