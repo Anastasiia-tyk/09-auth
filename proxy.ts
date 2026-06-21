@@ -2,7 +2,9 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import axios from "axios";
+import { cookies } from "next/headers"; // Вимога 1: асинхронні кукі
+import { checkSession } from "./lib/api/serverApi"; // Вимога 3: наша абстракція checkSession
+import { parse } from "cookie"; // Для копіювання оригінальних атрибутів
 
 const privateRoutes = ["/profile", "/notes"];
 const publicRoutes = ["/sign-in", "/sign-up"];
@@ -17,46 +19,43 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  let accessToken = request.cookies.get("accessToken")?.value;
-  const refreshToken = request.cookies.get("refreshToken")?.value;
+  const cookieStore = await cookies();
+  let accessToken = cookieStore.get("accessToken")?.value;
+  const refreshToken = cookieStore.get("refreshToken")?.value;
 
   let isAuthenticated = !!accessToken;
   let responseWithNewCookies: NextResponse | null = null;
 
   if (!accessToken && refreshToken) {
     try {
-      const refreshResponse = await axios.post(
-        "https://notehub-api.goit.study/auth/refresh",
-        {},
-        {
-          headers: {
-            Cookie: `refreshToken=${refreshToken}`,
-          },
-        }
-      );
+      const refreshResponse = await checkSession();
+      const setCookie = refreshResponse.headers["set-cookie"];
 
-      const setCookieHeader = refreshResponse.headers["set-cookie"];
-      
-      if (setCookieHeader) {
+      if (setCookie) {
         responseWithNewCookies = NextResponse.next();
-        
-        setCookieHeader.forEach((cookieStr) => {
-          const [fullCookie] = cookieStr.split(";");
-          const [name, value] = fullCookie.split("=");
-          responseWithNewCookies?.cookies.set(name.trim(), value.trim(), {
-            httpOnly: true,
-            secure: true,
-            sameSite: "strict",
-          });
-          if (name.trim() === "accessToken") {
-            accessToken = value.trim();
+        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+
+        for (const cookieStr of cookieArray) {
+          const parsed = parse(cookieStr);
+
+          const options = {
+            expires: parsed.Expires ? new Date(parsed.Expires) : undefined,
+            path: parsed.Path,
+            maxAge: parsed["Max-Age"] ? Number(parsed["Max-Age"]) : undefined,
+          };
+
+          if (parsed.accessToken) {
+            responseWithNewCookies.cookies.set("accessToken", parsed.accessToken, options);
+            accessToken = parsed.accessToken;
           }
-        });
-        
+          if (parsed.refreshToken) {
+            responseWithNewCookies.cookies.set("refreshToken", parsed.refreshToken, options);
+          }
+        }
         isAuthenticated = true;
       }
     } catch (error) {
-      console.error("Middleware refresh token error:", error);
+      console.error(error);
       isAuthenticated = false;
     }
   }

@@ -44,7 +44,7 @@ export const createNote = async (note: CreateNoteInput): Promise<Note> => {
 };
 
 export const deleteNote = async (id: string): Promise<Note> => {
-  const { data } = await api.get<Note>(`/notes/${id}`);
+  const { data } = await api.delete<Note>(`/notes/${id}`);
   return data;
 };
 
