@@ -10,6 +10,7 @@ import Link from "next/link";
 import css from "./NotesPage.module.css";
 
 import { fetchNotes } from "@/lib/api/clientApi";
+import type { NoteTag } from "@/types/note";
 
 import SearchBox from "@/components/SearchBox/SearchBox";
 import Pagination from "@/components/Pagination/Pagination";
@@ -28,7 +29,7 @@ export default function Notes({ tag }: NotesClientProps) {
 
     const { data } = useQuery({
         queryKey: ["notes", currentPage, searchQuery, tag],
-        queryFn: () => fetchNotes(currentPage, perPage, searchQuery, tag),
+        queryFn: () => fetchNotes(currentPage, perPage, searchQuery, tag as NoteTag | "all" | ""),
         placeholderData: keepPreviousData,
     });
 
