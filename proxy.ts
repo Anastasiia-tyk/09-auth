@@ -2,9 +2,8 @@
 
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { cookies } from "next/headers"; // Вимога 1: асинхронні кукі
-import { checkSession } from "./lib/api/serverApi"; // Вимога 3: наша абстракція checkSession
-import { parse } from "cookie"; // Для копіювання оригінальних атрибутів
+import { cookies } from "next/headers";
+import { checkSession } from "./lib/api/serverApi";
 
 const privateRoutes = ["/profile", "/notes"];
 const publicRoutes = ["/sign-in", "/sign-up"];
@@ -29,33 +28,47 @@ export async function proxy(request: NextRequest) {
   if (!accessToken && refreshToken) {
     try {
       const refreshResponse = await checkSession();
-      const setCookie = refreshResponse.headers["set-cookie"];
+      const setCookieHeader = refreshResponse.headers["set-cookie"];
 
-      if (setCookie) {
-        responseWithNewCookies = NextResponse.next();
-        const cookieArray = Array.isArray(setCookie) ? setCookie : [setCookie];
+      if (setCookieHeader) {
+  responseWithNewCookies = NextResponse.next();
 
-        for (const cookieStr of cookieArray) {
-          const parsed = parse(cookieStr);
+  const responseHeaders = new Headers();
+  const cookieArray = Array.isArray(setCookieHeader) ? setCookieHeader : [setCookieHeader];
+  cookieArray.forEach((cookieStr) => {
+    responseHeaders.append("set-cookie", cookieStr);
+  });
 
-          const options = {
-            expires: parsed.Expires ? new Date(parsed.Expires) : undefined,
-            path: parsed.Path,
-            maxAge: parsed["Max-Age"] ? Number(parsed["Max-Age"]) : undefined,
-          };
+  const tempResponse = new Response(null, {
+    headers: responseHeaders,
+  });
 
-          if (parsed.accessToken) {
-            responseWithNewCookies.cookies.set("accessToken", parsed.accessToken, options);
-            accessToken = parsed.accessToken;
+  const parsedCookies = tempResponse.headers.getSetCookie();
+
+        const headersObject = new Headers();
+        parsedCookies.forEach((c) => headersObject.append("set-cookie", c));
+        const edgeResponse = NextResponse.next({ headers: headersObject });
+
+        edgeResponse.cookies.getAll().forEach((c) => {
+          responseWithNewCookies?.cookies.set(c.name, c.value, {
+            path: c.path,
+            expires: c.expires,
+            maxAge: c.maxAge,
+            domain: c.domain,
+            sameSite: c.sameSite,
+            httpOnly: c.httpOnly,
+            secure: c.secure,
+          });
+
+          if (c.name === "accessToken") {
+            accessToken = c.value;
           }
-          if (parsed.refreshToken) {
-            responseWithNewCookies.cookies.set("refreshToken", parsed.refreshToken, options);
-          }
-        }
+        });
+
         isAuthenticated = true;
       }
     } catch (error) {
-      console.error(error);
+      console.error("Middleware session refresh failed:", error);
       isAuthenticated = false;
     }
   }
