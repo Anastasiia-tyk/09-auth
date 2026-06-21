@@ -4,7 +4,7 @@
 
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { fetchNotesById } from "@/lib/api";
+import { fetchNoteById } from "@/lib/api/clientApi";
 
 import css from "./NoteDetails.module.css";
 
@@ -14,7 +14,7 @@ export default function NoteDetailsClient() {
 
     const { data: note, isLoading, isError } = useQuery({
         queryKey: ["note", id],
-        queryFn: () => fetchNotesById(id),
+        queryFn: () => fetchNoteById(id),
         refetchOnMount: false,
         enabled: !!id,
     });
